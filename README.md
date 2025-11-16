@@ -131,3 +131,4 @@ O gerenciador utiliza o mesmo sistema de design dos outros projetos:
 - [ ] Exportação de dados
 - [ ] Relatórios avançados
 
+

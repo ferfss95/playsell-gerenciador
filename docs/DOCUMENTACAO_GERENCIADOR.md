@@ -225,3 +225,4 @@ Os arquivos serão gerados em `dist/`.
 - Confirme que as queries estão habilitadas
 - Verifique console para erros
 
+

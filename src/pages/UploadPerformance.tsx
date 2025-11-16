@@ -45,14 +45,19 @@ export default function UploadPerformance() {
       const result = await addPerformancesFromCSV(csvData);
       setResult(result);
       
-      if (result.errors.length === 0) {
-        toast.success(`${result.success} registro(s) de vendas/indicadores processado(s) com sucesso!`);
+      if (result.errors.length === 0 && result.success > 0) {
+        toast.success(`✅ ${result.success} registro(s) de vendas/indicadores salvo(s) no banco de dados com sucesso!`);
         setTimeout(() => navigate("/users"), 2000);
+      } else if (result.success > 0) {
+        toast.warning(`⚠️ ${result.success} registro(s) salvo(s), ${result.errors.length} erro(s) encontrado(s)`);
+      } else if (result.errors.length > 0) {
+        toast.error(`❌ Nenhum registro foi salvo. ${result.errors.length} erro(s) encontrado(s)`);
       } else {
-        toast.warning(`${result.success} processado(s), ${result.errors.length} erro(s)`);
+        toast.error("❌ Nenhum dado válido encontrado para processar");
       }
     } catch (error: any) {
-      toast.error(error.message || "Erro ao processar CSV");
+      console.error("Erro ao processar CSV de indicadores:", error);
+      toast.error(`❌ Erro ao processar CSV: ${error.message || "Erro desconhecido"}`);
     } finally {
       setIsLoading(false);
     }
@@ -134,7 +139,7 @@ export default function UploadPerformance() {
                 className="flex-1"
                 onClick={() => navigate("/performance")}
               >
-                Cancelar
+                Voltar
               </Button>
               <Button
                 onClick={handleSubmit}

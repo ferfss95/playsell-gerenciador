@@ -15,3 +15,4 @@ export const supabase: SupabaseClient | null = (supabaseUrl && supabaseKey)
     })
   : null;
 
+
