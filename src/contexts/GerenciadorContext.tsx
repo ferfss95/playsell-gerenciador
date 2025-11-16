@@ -14,6 +14,7 @@ interface GerenciadorContextType {
     store_id?: string;
     regional_id?: string;
   }) => Promise<void>;
+  createUsersFromCSV: (csvData: string) => Promise<{ success: number; errors: string[] }>;
   updateUser: (userId: string, updates: Partial<Profile>) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
   addPerformance: (performance: {
@@ -25,6 +26,7 @@ interface GerenciadorContextType {
     nps: number;
     conversion_rate: number;
   }) => Promise<void>;
+  addPerformancesFromCSV: (csvData: string) => Promise<{ success: number; errors: string[] }>;
   updatePerformance: (performanceId: string, updates: Partial<DailyPerformance>) => Promise<void>;
 }
 
@@ -259,15 +261,174 @@ export function GerenciadorProvider({ children }: { children: ReactNode }) {
     await updatePerformanceMutation.mutateAsync({ performanceId, updates });
   };
 
+  // Processar CSV de usuários
+  const createUsersFromCSV = async (csvData: string): Promise<{ success: number; errors: string[] }> => {
+    if (!supabase) throw new Error("Supabase não configurado");
+
+    const lines = csvData.trim().split("\n");
+    if (lines.length < 2) {
+      throw new Error("CSV deve ter pelo menos um cabeçalho e uma linha de dados");
+    }
+
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const emailIdx = headers.indexOf("email");
+    const senhaIdx = headers.indexOf("senha");
+    const nomeIdx = headers.indexOf("nome_completo");
+    const lojaIdx = headers.indexOf("loja_id");
+    const regionalIdx = headers.indexOf("regional_id");
+
+    if (emailIdx === -1 || senhaIdx === -1 || nomeIdx === -1) {
+      throw new Error("CSV deve conter as colunas: email, senha, nome_completo");
+    }
+
+    const errors: string[] = [];
+    let success = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const values = line.split(",").map((v) => v.trim());
+      const email = values[emailIdx];
+      const password = values[senhaIdx];
+      const full_name = values[nomeIdx];
+      const store_id = lojaIdx >= 0 && values[lojaIdx] ? values[lojaIdx] : undefined;
+      const regional_id = regionalIdx >= 0 && values[regionalIdx] ? values[regionalIdx] : undefined;
+
+      if (!email || !password || !full_name) {
+        errors.push(`Linha ${i + 1}: Campos obrigatórios faltando`);
+        continue;
+      }
+
+      try {
+        await createUser({
+          email,
+          password,
+          full_name,
+          store_id,
+          regional_id,
+        });
+        success++;
+      } catch (error: any) {
+        errors.push(`Linha ${i + 1} (${email}): ${error.message || "Erro desconhecido"}`);
+      }
+    }
+
+    return { success, errors };
+  };
+
+  // Processar CSV de vendas/indicadores
+  const addPerformancesFromCSV = async (csvData: string): Promise<{ success: number; errors: string[] }> => {
+    if (!supabase) throw new Error("Supabase não configurado");
+
+    const lines = csvData.trim().split("\n");
+    if (lines.length < 2) {
+      throw new Error("CSV deve ter pelo menos um cabeçalho e uma linha de dados");
+    }
+
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const emailIdx = headers.indexOf("email");
+    const nomeIdx = headers.indexOf("nome");
+    const dataIdx = headers.indexOf("data");
+    const metaIdx = headers.indexOf("meta_vendas");
+    const vendasIdx = headers.indexOf("vendas_atuais");
+    const ticketIdx = headers.indexOf("ticket_medio");
+    const npsIdx = headers.indexOf("nps");
+    const conversaoIdx = headers.indexOf("taxa_conversao");
+
+    if (
+      emailIdx === -1 ||
+      nomeIdx === -1 ||
+      dataIdx === -1 ||
+      metaIdx === -1 ||
+      vendasIdx === -1 ||
+      ticketIdx === -1 ||
+      npsIdx === -1 ||
+      conversaoIdx === -1
+    ) {
+      throw new Error(
+        "CSV deve conter todas as colunas: email, nome, data, meta_vendas, vendas_atuais, ticket_medio, nps, taxa_conversao"
+      );
+    }
+
+    const errors: string[] = [];
+    let success = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const values = line.split(",").map((v) => v.trim());
+      const email = values[emailIdx];
+      const nome = values[nomeIdx];
+      const date = values[dataIdx];
+      const sales_target = parseFloat(values[metaIdx]) || 0;
+      const sales_current = parseFloat(values[vendasIdx]) || 0;
+      const average_ticket = parseFloat(values[ticketIdx]) || 0;
+      const nps = parseInt(values[npsIdx]) || 0;
+      const conversion_rate = parseFloat(values[conversaoIdx]) || 0;
+
+      if (!email || !date) {
+        errors.push(`Linha ${i + 1}: Email e data são obrigatórios`);
+        continue;
+      }
+
+      try {
+        // Buscar usuário por email no auth.users primeiro
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+        
+        if (authError) {
+          errors.push(`Linha ${i + 1} (${email}): Erro ao buscar usuários`);
+          continue;
+        }
+
+        const authUser = authUsers?.users.find((u) => u.email === email);
+        if (!authUser) {
+          errors.push(`Linha ${i + 1} (${email}): Usuário não encontrado`);
+          continue;
+        }
+
+        // Verificar se o perfil existe
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", authUser.id)
+          .single();
+
+        if (profileError || !profile) {
+          errors.push(`Linha ${i + 1} (${email}): Perfil não encontrado`);
+          continue;
+        }
+
+        await addPerformance({
+          user_id: profile.id,
+          date,
+          sales_target,
+          sales_current,
+          average_ticket,
+          nps,
+          conversion_rate,
+        });
+        success++;
+      } catch (error: any) {
+        errors.push(`Linha ${i + 1} (${email}): ${error.message || "Erro desconhecido"}`);
+      }
+    }
+
+    return { success, errors };
+  };
+
   return (
     <GerenciadorContext.Provider
       value={{
         users,
         isLoading,
         createUser,
+        createUsersFromCSV,
         updateUser,
         deleteUser,
         addPerformance,
+        addPerformancesFromCSV,
         updatePerformance,
       }}
     >

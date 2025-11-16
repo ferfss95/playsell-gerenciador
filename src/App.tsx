@@ -9,6 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
 import RegisterUser from "./pages/RegisterUser";
 import Performance from "./pages/Performance";
+import UploadUsers from "./pages/UploadUsers";
+import UploadPerformance from "./pages/UploadPerformance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -37,6 +39,8 @@ const App = () => {
                 <Route path="/users" element={<Users />} />
                 <Route path="/register" element={<RegisterUser />} />
                 <Route path="/performance" element={<Performance />} />
+                <Route path="/upload-users" element={<UploadUsers />} />
+                <Route path="/upload-performance" element={<UploadPerformance />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Layout>
