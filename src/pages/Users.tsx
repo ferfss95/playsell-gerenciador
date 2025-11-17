@@ -7,16 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useGerenciador } from "@/contexts/GerenciadorContext";
-import { Users as UsersIcon, Search, Trash2, DollarSign, UserPlus, Upload } from "lucide-react";
+import { Users as UsersIcon, Search, Trash2, DollarSign, UserPlus, Upload, Key } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function Users() {
-  const { users, isLoading, deleteUser } = useGerenciador();
+  const { users, isLoading, deleteUser, resetUserPassword } = useGerenciador();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null);
 
   const filteredUsers = users.filter((user) =>
     user.full_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -29,6 +30,33 @@ export default function Users() {
         toast.success("Usuário deletado com sucesso");
       } catch (error) {
         toast.error("Erro ao deletar usuário");
+      }
+    }
+  };
+
+  const handleResetPassword = async (userId: string, userName: string, enrollmentNumber?: string | null) => {
+    if (!enrollmentNumber) {
+      toast.error("Usuário não possui matrícula cadastrada");
+      return;
+    }
+
+    const senhaFinal = enrollmentNumber.length < 6 ? enrollmentNumber.padStart(6, '0') : enrollmentNumber;
+    
+    if (confirm(`Deseja resetar a senha do usuário "${userName}" para a matrícula?\n\nMatrícula: ${enrollmentNumber}\nSenha será: ${senhaFinal}\n\nApós o reset, o usuário poderá fazer login com a matrícula.`)) {
+      setResettingPassword(userId);
+      try {
+        console.log(`🔄 Resetando senha para ${userName} (${userId})...`);
+        await resetUserPassword(userId);
+        
+        const mensagem = `✅ Senha resetada com sucesso!\n\nUsuário: ${userName}\nMatrícula: ${enrollmentNumber}\nSenha: ${senhaFinal}\n\nO usuário pode fazer login agora com a matrícula.`;
+        toast.success(mensagem, { duration: 5000 });
+        
+        console.log(`✅ Reset de senha concluído para ${userName}`);
+      } catch (error: any) {
+        console.error(`❌ Erro ao resetar senha:`, error);
+        toast.error(error.message || "Erro ao resetar senha. Verifique o console para mais detalhes.", { duration: 5000 });
+      } finally {
+        setResettingPassword(null);
       }
     }
   };
@@ -139,6 +167,20 @@ export default function Users() {
                           <p className="text-xs text-muted-foreground">Últimas vendas</p>
                         </div>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleResetPassword(user.id, user.full_name, user.enrollment_number)}
+                        disabled={resettingPassword === user.id || !user.enrollment_number}
+                        className="text-primary hover:text-primary hover:bg-primary/10"
+                        title="Resetar senha para a matrícula"
+                      >
+                        {resettingPassword === user.id ? (
+                          <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Key className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

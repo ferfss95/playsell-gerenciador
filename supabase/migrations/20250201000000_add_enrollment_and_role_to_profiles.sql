@@ -84,3 +84,4 @@ COMMENT ON COLUMN public.profiles.enrollment_number IS 'Número de matrícula ú
 COMMENT ON TABLE public.user_roles IS 'Tabela que armazena os papéis (roles) dos usuários no sistema';
 COMMENT ON COLUMN public.user_roles.role IS 'Papel do usuário: admin (administrador), leader (líder), user (usuário padrão)';
 
+

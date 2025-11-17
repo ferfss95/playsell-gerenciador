@@ -28,6 +28,7 @@ export default function UploadPerformance() {
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
     const text = e.clipboardData.getData("text");
     setCsvData(text);
   };

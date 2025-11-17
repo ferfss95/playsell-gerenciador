@@ -16,6 +16,8 @@ interface ParsedUser {
   role: string;
   store_id?: string;
   regional_id?: string;
+  store?: string;
+  regional?: string;
   errors?: string[];
   isValid?: boolean;
 }
@@ -74,6 +76,8 @@ export default function UploadUsers() {
       const cargoIdx = headers.indexOf("cargo");
       const lojaIdx = headers.indexOf("loja_id");
       const regionalIdx = headers.indexOf("regional_id");
+      const lojaNomeIdx = headers.indexOf("loja");
+      const regionalNomeIdx = headers.indexOf("regional");
 
       // Validar se as colunas obrigatórias existem
       if (emailIdx === -1 || senhaIdx === -1 || nomeIdx === -1) {
@@ -92,9 +96,23 @@ export default function UploadUsers() {
       const password = values[senhaIdx] || "";
       const full_name = values[nomeIdx] || "";
       const enrollment_number = matriculaIdx >= 0 && values[matriculaIdx] ? values[matriculaIdx].trim() : "";
-      const role = cargoIdx >= 0 && values[cargoIdx] ? values[cargoIdx].toLowerCase().trim() : "";
-      const store_id = lojaIdx >= 0 && values[lojaIdx] ? values[lojaIdx] : "";
-      const regional_id = regionalIdx >= 0 && values[regionalIdx] ? values[regionalIdx] : "";
+      
+      // Extrair cargo e normalizar (lowercase, trim, mapear variações comuns)
+      let role = cargoIdx >= 0 && values[cargoIdx] ? values[cargoIdx].toLowerCase().trim() : "";
+      
+      // Normalizar variações de cargo
+      if (role === "administrador" || role === "administrator") {
+        role = "admin";
+      } else if (role === "líder" || role === "lider" || role === "leader") {
+        role = "leader";
+      } else if (role === "usuário" || role === "usuario" || role === "user") {
+        role = "user";
+      }
+      
+      const store_id = lojaIdx >= 0 && values[lojaIdx] ? values[lojaIdx].trim() : "";
+      const regional_id = regionalIdx >= 0 && values[regionalIdx] ? values[regionalIdx].trim() : "";
+      const store = lojaNomeIdx >= 0 && values[lojaNomeIdx] ? values[lojaNomeIdx].trim() : "";
+      const regional = regionalNomeIdx >= 0 && values[regionalNomeIdx] ? values[regionalNomeIdx].trim() : "";
 
       const errors: string[] = [];
       let isValid = true;
@@ -103,9 +121,15 @@ export default function UploadUsers() {
       if (!email) {
         errors.push("Email é obrigatório");
         isValid = false;
+      } else if (!email.includes("@")) {
+        errors.push("Email inválido");
+        isValid = false;
       }
       if (!password) {
         errors.push("Senha é obrigatória");
+        isValid = false;
+      } else if (password.length < 6) {
+        errors.push("Senha deve ter no mínimo 6 caracteres");
         isValid = false;
       }
       if (!full_name) {
@@ -132,6 +156,8 @@ export default function UploadUsers() {
         role,
         store_id: store_id || undefined,
         regional_id: regional_id || undefined,
+        store: store || undefined,
+        regional: regional || undefined,
         errors: errors.length > 0 ? errors : undefined,
         isValid,
       });
@@ -157,6 +183,7 @@ export default function UploadUsers() {
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
     const text = e.clipboardData.getData("text");
     setCsvData(text);
   };
@@ -191,18 +218,29 @@ export default function UploadUsers() {
       } else if (result.success > 0) {
         toast.warning(`⚠️ ${result.success} usuário(s) salvo(s), ${result.errors.length} erro(s) encontrado(s)`);
       } else if (result.errors.length > 0) {
-        toast.error(`❌ Nenhum usuário foi salvo no banco. ${result.errors.length} erro(s) encontrado(s)`);
+        const errorDetails = result.errors.slice(0, 5).join("; ");
+        const moreErrors = result.errors.length > 5 ? ` e mais ${result.errors.length - 5} erro(s)` : "";
+        toast.error(`❌ Nenhum usuário foi salvo no banco. ${result.errors.length} erro(s) encontrado(s). ${errorDetails}${moreErrors}`);
       } else {
         toast.error("❌ Nenhum dado válido encontrado para processar");
       }
     } catch (error: any) {
       console.error("Erro ao processar CSV:", error);
-      toast.error(error.message || "Erro ao processar CSV. Verifique o console para mais detalhes.");
+      const errorMessage = error?.message || error?.toString() || "Erro desconhecido ao processar CSV";
+      toast.error(`❌ Erro ao processar CSV: ${errorMessage}`);
       
       // Mostrar erro detalhado no console
-      if (error.message) {
-        console.error("Detalhes do erro:", error.message);
-      }
+      console.error("Detalhes completos do erro:", {
+        message: errorMessage,
+        error: error,
+        stack: error?.stack,
+      });
+      
+      // Definir resultado com erro para exibir na UI
+      setResult({
+        success: 0,
+        errors: [errorMessage],
+      });
     } finally {
       setIsLoading(false);
     }
@@ -224,15 +262,17 @@ export default function UploadUsers() {
               <br />
               <br />
               <code className="text-xs bg-muted p-1 rounded">
-                email,senha,nome_completo,matricula,cargo,loja_id,regional_id
+                email,senha,nome_completo,matricula,cargo,loja_id,regional_id,loja,regional
               </code>
               <br />
               <span className="text-xs text-muted-foreground mt-2 block">
                 Campos obrigatórios: email, senha, nome_completo, matricula, cargo
                 <br />
-                Campos opcionais: loja_id, regional_id
+                Campos opcionais: loja_id, regional_id, loja, regional
                 <br />
                 Cargo deve ser: admin, leader ou user
+                <br />
+                <strong>Nota:</strong> Se fornecer <code>loja</code> e <code>regional</code> (nomes), eles serão salvos nos campos de nome. Caso contrário, os IDs serão usados como nome.
               </span>
               <div className="mt-3 p-2 bg-info/10 border border-info/20 rounded-md">
                 <div className="flex items-start gap-2">
@@ -266,7 +306,7 @@ export default function UploadUsers() {
                 value={csvData}
                 onChange={(e) => setCsvData(e.target.value)}
                 onPaste={handlePaste}
-                placeholder="email,senha,nome_completo,matricula,cargo,loja_id,regional_id&#10;joao@exemplo.com,senha123,João Silva,MAT-001,user,LOJA-001,REG-001&#10;maria@exemplo.com,senha456,Maria Santos,MAT-002,leader,LOJA-002,REG-001&#10;pedro@exemplo.com,senha789,Pedro Costa,MAT-003,admin,LOJA-001,REG-001"
+                placeholder="email,senha,nome_completo,matricula,cargo,loja_id,regional_id,loja,regional&#10;joao@exemplo.com,senha123,João Silva,MAT-001,user,LOJA-001,REG-001,Loja Centro,Sul&#10;maria@exemplo.com,senha456,Maria Santos,MAT-002,leader,LOJA-002,REG-001,Loja Norte,Norte&#10;pedro@exemplo.com,senha789,Pedro Costa,MAT-003,admin,LOJA-001,REG-001,Loja Centro,Sul"
                 className="w-full min-h-[200px] p-3 border rounded-md font-mono text-sm"
               />
             </div>
@@ -283,7 +323,7 @@ export default function UploadUsers() {
                 <p className="text-xs text-muted-foreground mt-2">
                   Certifique-se de que o CSV contém o cabeçalho correto e pelo menos uma linha de dados.
                   <br />
-                  Formato esperado: email,senha,nome_completo,matricula,cargo,loja_id,regional_id
+                  Formato esperado: email,senha,nome_completo,matricula,cargo,loja_id,regional_id,loja,regional
                 </p>
               </div>
             )}
@@ -338,8 +378,12 @@ export default function UploadUsers() {
                                 {user.role || "-"}
                               </span>
                             </td>
-                            <td className="px-3 py-2">{user.store_id || "-"}</td>
-                            <td className="px-3 py-2">{user.regional_id || "-"}</td>
+                            <td className="px-3 py-2">
+                              {user.store ? `${user.store}${user.store_id ? ` (${user.store_id})` : ""}` : user.store_id || "-"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {user.regional ? `${user.regional}${user.regional_id ? ` (${user.regional_id})` : ""}` : user.regional_id || "-"}
+                            </td>
                             <td className="px-3 py-2">
                               {user.isValid ? (
                                 <div className="flex items-center gap-1 text-success text-xs">
@@ -444,13 +488,15 @@ export default function UploadUsers() {
               <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
                 <li><code>loja_id</code> - ID da loja</li>
                 <li><code>regional_id</code> - ID regional</li>
+                <li><code>loja</code> - Nome da loja (se fornecido, será salvo como nome; caso contrário, o ID será usado)</li>
+                <li><code>regional</code> - Nome da regional (se fornecido, será salvo como nome; caso contrário, o ID será usado)</li>
               </ul>
               <p className="mt-4 font-semibold">Exemplo:</p>
               <pre className="bg-muted p-3 rounded text-xs overflow-x-auto">
-{`email,senha,nome_completo,matricula,cargo,loja_id,regional_id
-joao@exemplo.com,senha123,João Silva,MAT-001,user,LOJA-001,REG-001
-maria@exemplo.com,senha456,Maria Santos,MAT-002,leader,LOJA-002,REG-001
-pedro@exemplo.com,senha789,Pedro Costa,MAT-003,admin,LOJA-001,REG-001`}
+{`email,senha,nome_completo,matricula,cargo,loja_id,regional_id,loja,regional
+joao@exemplo.com,senha123,João Silva,MAT-001,user,LOJA-001,REG-001,Loja Centro,Sul
+maria@exemplo.com,senha456,Maria Santos,MAT-002,leader,LOJA-002,REG-001,Loja Norte,Norte
+pedro@exemplo.com,senha789,Pedro Costa,MAT-003,admin,LOJA-001,REG-001,Loja Centro,Sul`}
               </pre>
             </div>
           </CardContent>

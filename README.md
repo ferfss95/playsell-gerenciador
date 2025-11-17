@@ -123,6 +123,19 @@ O gerenciador utiliza o mesmo sistema de design dos outros projetos:
 - Animações suaves
 - Efeitos de hover e glow
 
+## 📚 Documentação
+
+Para documentação completa, consulte:
+- **[DOCUMENTACAO_COMPLETA.md](./DOCUMENTACAO_COMPLETA.md)** - Guia completo com todas as informações
+
+A documentação inclui:
+- Configuração detalhada
+- Todas as funcionalidades
+- Sistema de autenticação e senhas
+- Troubleshooting completo
+- Migrações e banco de dados
+- Arquitetura e tecnologias
+
 ## 📝 Próximos Passos
 
 - [ ] Autenticação e autorização
@@ -130,5 +143,6 @@ O gerenciador utiliza o mesmo sistema de design dos outros projetos:
 - [ ] Histórico de indicadores
 - [ ] Exportação de dados
 - [ ] Relatórios avançados
+
 
 
